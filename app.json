@@ -24,10 +24,10 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.tuusuario.tarotgo",
+      "package": "com.diego44h.tarotgo",
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyD0EeEABKp5PNAS9_EqadJX8ov46-ARrWs"
+          "apiKey": "process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
         }
       },
       "permissions": [
