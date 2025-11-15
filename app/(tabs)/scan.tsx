@@ -3,26 +3,30 @@ import * as Location from 'expo-location'; // Importamos la ubicación
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'; // Funciones de Firestore
 import React, { useState } from 'react';
 import { Alert, Button, StyleSheet, Text, View } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebaseConfig'; // Importamos la BD
 
 export default function ScanScreen() {
   
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanned, setIsScanned] = useState(false);
+  const { user } = useAuth();
 
-  // --- ¡AQUÍ ESTÁ LA NUEVA LÓGICA! ---
-  const handleBarCodeScanned = async ({ type, data }: { type: string, data: string }) => {
+const handleBarCodeScanned = async ({ type, data }: { type: string, data: string }) => {
     
     if (isScanned) return; // Si ya escaneó, no hacer nada
-    
     setIsScanned(true); // Bloquear nuevos escaneos
     
-    // TODO: Usar un ID de usuario real cuando implementemos Auth
-    const currentUserId = "usuario_de_prueba_123";
+    // 1. VERIFICAR QUE TENEMOS UN USUARIO
+    if (!user) {
+      Alert.alert("Error", "No se ha podido identificar al usuario. Reinicia la app.");
+      setIsScanned(false);
+      return;
+    }
+    // (La línea "usuario_de_prueba_123" ya se fue)
 
     try {
-      // 1. Obtener la ubicación actual
-      // (Ya dimos permiso en la pestaña Mapa, pero lo verificamos por si acaso)
+      // 2. Obtener la ubicación actual
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert("Error", "No tienes permisos de ubicación para guardar la carta.");
@@ -32,23 +36,23 @@ export default function ScanScreen() {
       
       let location = await Location.getCurrentPositionAsync({});
       
-      // 2. Preparar el nuevo documento
+      // 3. Preparar el nuevo documento (¡con el user.uid real!)
       const newCardData = {
-        userId: currentUserId,
+        userId: user.uid,
         cardId: data, // "el_mago", "el_loco", etc.
         location: {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
         },
-        timestamp: serverTimestamp() // Poner la fecha/hora actual del servidor
+        timestamp: serverTimestamp() 
       };
 
-      // 3. Guardar en la colección 'found_cards'
+      // 4. Guardar en la colección 'found_cards'
       const docRef = await addDoc(collection(db, "found_cards"), newCardData);
       
       console.log("Carta guardada con ID:", docRef.id);
       
-      // 4. Confirmar al usuario
+      // 5. Confirmar al usuario
       Alert.alert(
         "¡Carta Encontrada!",
         `¡Has guardado la carta "${data}" en tu ubicación!`,
@@ -63,7 +67,7 @@ export default function ScanScreen() {
       setIsScanned(false); // Permitir reintentar
     }
   };
-
+  
   // --- Renderizado (mismo código de permisos que antes) ---
   if (!permission) {
     return (

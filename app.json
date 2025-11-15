@@ -10,7 +10,9 @@
     "newArchEnabled": true,
 
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      // --- 👇 AÑADE ESTO ---
+      "associatedDomains": ["applinks:tarotgoapp.vercel.app"]
     },
 
     "android": {
@@ -31,6 +33,27 @@
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.CAMERA"
+      ],
+      // --- 👇 AÑADE ESTO ---
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https"
+            },
+            {
+              "scheme": "https",
+              "host": "tarotgoapp.vercel.app",
+              "pathPrefix": "/card"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
       ]
     },
 
@@ -40,6 +63,7 @@
     },
 
     "plugins": [
+      // ... (El resto de tus plugins no cambia)
       "expo-router",
       [
         "expo-splash-screen",

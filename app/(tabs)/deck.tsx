@@ -1,9 +1,10 @@
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
-import { db } from '../../firebaseConfig'; // Importamos nuestra conexión a Firestore
+import { ActivityIndicator, Alert, Button, FlatList, Share, StyleSheet, Text, View } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
+import { db } from '../../firebaseConfig';
 
-// Definimos un tipo para nuestros datos de Carta (buena práctica con TypeScript)
+// Tipo para las cartas estáticas
 interface TarotCard {
   id: string;
   nombre: string;
@@ -11,42 +12,94 @@ interface TarotCard {
   descripcion: string;
 }
 
-export default function DeckScreen() {
-  // Estado para guardar las cartas que vienen de Firebase
-  const [cards, setCards] = useState<TarotCard[]>([]);
-  // Estado para saber si estamos cargando los datos
-  const [loading, setLoading] = useState(true);
-  // Estado para cualquier error
-  const [error, setError] = useState<string | null>(null);
+// 👈 Tipo modificado
+interface MergedCard extends TarotCard {
+  found: boolean;
+  foundCardDocId: string | null;
+}
 
-  // useEffect para cargar los datos cuando la pantalla se abre
+export default function DeckScreen() {
+  const [mergedCards, setMergedCards] = useState<MergedCard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+
   useEffect(() => {
-    const fetchCards = async () => {
+    if (!user) return;
+
+    const fetchAndMergeCards = async () => {
       try {
-        // 1. Apuntamos a la colección 'cards'
-        const querySnapshot = await getDocs(collection(db, "cards"));
-        
-        // 2. Mapeamos los resultados y los guardamos en un array
-        const cardsData = querySnapshot.docs.map(doc => ({
+        // 1. Obtener TODAS las cartas
+        const cardsSnapshot = await getDocs(collection(db, "cards"));
+        const allCards: TarotCard[] = cardsSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-        })) as TarotCard[]; // Le decimos que los datos son de tipo TarotCard
+        })) as TarotCard[];
 
-        setCards(cardsData); // Guardamos los datos en el estado
+        // 2. Escuchar las cartas encontradas
+        const foundCardsQuery = query(collection(db, "found_cards"), where("userId", "==", user.uid));
+
+        const unsubscribe = onSnapshot(foundCardsQuery, (foundSnapshot) => {
+
+          // 👈 Map modificado => Map<cardId, foundCardDocId>
+          const foundCardsMap = new Map<string, string>();
+          foundSnapshot.forEach(doc => {
+            foundCardsMap.set(doc.data().cardId, doc.id);
+          });
+
+          // 👈 Fusión modificada
+          const mergedData = allCards.map(card => ({
+            ...card,
+            found: foundCardsMap.has(card.id),
+            foundCardDocId: foundCardsMap.get(card.id) || null,
+          }));
+
+          setMergedCards(mergedData);
+          setLoading(false);
+          setError(null);
+
+        }, (err) => {
+          console.error("Error escuchando found_cards:", err);
+          setError("No se pudieron cargar las cartas encontradas.");
+          setLoading(false);
+        });
+
+        return unsubscribe;
+
       } catch (e) {
-        console.error("Error al obtener las cartas:", e);
+        console.error("Error en FETCH:", e);
         setError("No se pudieron cargar las cartas.");
-      } finally {
-        setLoading(false); // Terminamos de cargar (ya sea con éxito o error)
+        setLoading(false);
       }
     };
 
-    fetchCards();
-  }, []); // El [] asegura que solo se ejecute una vez
+    fetchAndMergeCards();
 
-  // --- Renderizado ---
+  }, [user]);
 
-  // Si está cargando, mostramos un indicador
+
+  // 👈 Función compartir
+  const handleShare = async (card: MergedCard) => {
+    if (!card.foundCardDocId) return;
+
+    // Este es el link que queremos compartir
+    const deepLink = `https://tarotgoapp.vercel.app/card/${card.foundCardDocId}`;
+
+    try {
+      // Usamos la API Share
+      await Share.share({
+        // 'message' es el texto que se enviará
+        message: `¡Encontré una carta! Ábrela en TarotGo: ${deepLink}`,
+        // 'title' es para el diálogo de Android
+        title: `¡Te comparto la carta ${card.nombre}!`
+      });
+    } catch (error) {
+      Alert.alert("Error", "No se pudo compartir la carta.");
+    }
+  };
+
+
+  // Renderizado
   if (loading) {
     return (
       <View style={styles.container}>
@@ -55,7 +108,6 @@ export default function DeckScreen() {
     );
   }
 
-  // Si hubo un error
   if (error) {
     return (
       <View style={styles.container}>
@@ -64,15 +116,30 @@ export default function DeckScreen() {
     );
   }
 
-  // Si todo salió bien, mostramos la lista de cartas
   return (
     <FlatList
-      data={cards} // Los datos que cargamos
-      keyExtractor={(item) => item.id} // El ID único para cada item
+      data={mergedCards}
+      keyExtractor={(item) => item.id}
       renderItem={({ item }) => (
-        <View style={styles.cardItem}>
-          <Text style={styles.cardTitle}>{item.nombre} (Arcano {item.numero})</Text>
-          <Text style={styles.cardDescription}>{item.descripcion}</Text>
+        <View style={[styles.cardItem, !item.found && styles.cardItemLocked]}>
+          <Text style={[styles.cardTitle, !item.found && styles.cardTextLocked]}>
+            {item.nombre} {item.found ? "✅" : "(Bloqueada)"}
+          </Text>
+
+          <Text style={[styles.cardDescription, !item.found && styles.cardTextLocked]}>
+            {item.found ? item.descripcion : "Escanea esta carta para desbloquearla."}
+          </Text>
+
+          {/* 👈 Botón agregar */}
+          {item.found && (
+            <View style={styles.shareButton}>
+              <Button 
+                title="Compartir"
+                onPress={() => handleShare(item)}
+                color="#A020F0"
+              />
+            </View>
+          )}
         </View>
       )}
       contentContainerStyle={styles.listContainer}
@@ -80,6 +147,8 @@ export default function DeckScreen() {
   );
 }
 
+
+// --- Estilos ---
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
@@ -100,6 +169,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 2,
+    borderColor: '#A020F0',
+  },
+  cardItemLocked: {
+    backgroundColor: '#e0e0e0',
+    borderColor: '#999',
+    shadowOpacity: 0.05,
+    elevation: 1,
   },
   cardTitle: {
     fontSize: 18,
@@ -111,8 +188,15 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 5,
   },
+  cardTextLocked: {
+    color: '#777',
+  },
   errorText: {
     color: 'red',
     fontSize: 16,
+  },
+  shareButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
   }
 });

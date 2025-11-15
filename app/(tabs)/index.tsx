@@ -1,91 +1,104 @@
-import * as Location from 'expo-location'; // Importamos expo-location
+import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
+import { db } from '../../firebaseConfig';
+// 👇 ¡Importamos 'query' y 'where' para filtrar!
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { useAuth } from '../../context/AuthContext'; // 👈 1. IMPORTAR EL HOOK DE AUTH
+
+interface FoundCard {
+  id: string;
+  cardId: string;
+  location: { latitude: number; longitude: number };
+  userId: string;
+}
 
 export default function MapScreen() {
-  
-  // Estado para guardar la región del mapa (que será la ubicación del usuario)
-  const [region, setRegion] = useState<Region | undefined>(undefined);
-  // Estado para mensajes de error
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Este 'useEffect' se ejecuta una vez cuando el componente se carga
+  const [region, setRegion] = useState<Region | undefined>(undefined);
+
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [foundCards, setFoundCards] = useState<FoundCard[]>([]);
+  const { user } = useAuth(); // 👈 2. OBTENER EL USUARIO
+
+  // 1. useEffect para la ubicación (igual que antes)
   useEffect(() => {
     (async () => {
-      
-      // 1. Pedir  al usuario
+      // ... (código de permisos de ubicación igual que antes)
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setErrorMsg('Permiso de ubicación denegado');
-        // Si lo deniegan, centramos el mapa en una ubicación por defecto
-        setRegion({
-          latitude: 19.432608,
-          longitude: -99.133209,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        });
+        setRegion({ latitude: 19.432608, longitude: -99.133209, latitudeDelta: 0.0922, longitudeDelta: 0.0421 });
         return;
       }
-
-      // 2. Obtener la ubicación actual
-      let location = await Location.getCurrentPositionAsync({});
       
-      // 3. Actualizar el estado de la región para centrar el mapa
+      let location = await Location.getCurrentPositionAsync({});
+
       setRegion({
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
-        latitudeDelta: 0.0922, // Zoom inicial
-        longitudeDelta: 0.0421, // Zoom inicial
+        latitudeDelta: 0.0922,
+        longitudeDelta: 0.0421,
       });
     })();
-  }, []); // El array vacío [] asegura que esto solo se ejecute una vez
+  }, []);
 
-  // --- Renderizado ---
+  // 2. useEffect para escuchar las cartas (¡MODIFICADO!)
+  useEffect(() => {
+    // 👈 3. Si no hay usuario, no hacer nada (evita errores)
+    if (!user) {
+      return; 
+    }
 
-  // Si hay un error, mostramos el error
-  if (errorMsg) {
-    return (
-      <View style={styles.container}>
-        <Text>{errorMsg}</Text>
-      </View>
-    );
-  }
+    // 👈 4. Crear una consulta (query) filtrada
+    const cardsCollection = collection(db, "found_cards");
+    const q = query(cardsCollection, where("userId", "==", user.uid)); // Filtra por el ID del usuario actual
 
-  // Si todavía no hemos cargado la ubicación, mostramos un 'Cargando...'
-  if (!region) {
-    return (
-      <View style={styles.container}>
-        <Text>Obteniendo ubicación...</Text>
-      </View>
-    );
-  }
+    // Usamos 'q' (la consulta) en lugar de 'cardsCollection'
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const cardsData: FoundCard[] = [];
+      querySnapshot.forEach((doc) => {
+        cardsData.push({ id: doc.id, ...doc.data() } as FoundCard);
+      });
+      
+      setFoundCards(cardsData);
+      console.log("Cartas PROPIAS cargadas en el mapa:", cardsData.length);
+      
+    }, (error) => {
+      console.error("Error al escuchar 'found_cards' propias:", error);
+      setErrorMsg("No se pudieron cargar tus cartas en el mapa.");
+    });
 
-  // Si todo está bien, mostramos el mapa centrado
+    return () => unsubscribe();
+    
+  }, [user]); // 👈 5. RE-EJECUTAR si el 'user' cambia
+
+  // --- Renderizado (igual que antes) ---
+  if (errorMsg && !region) { /* ... */ }
+  if (!region) { /* ... */ }
+
   return (
     <MapView
       style={styles.map}
-      region={region} // Usamos 'region' en lugar de 'initialRegion'
-      showsUserLocation={true} // Muestra el punto azul de la ubicación del usuario
+      region={region}
+      showsUserLocation={true}
     >
-      {/* Aquí es donde luego leeremos de Firestore
-        para poner los marcadores de las cartas encontradas 
-      */}
-      <Marker
-        coordinate={{ latitude: region.latitude, longitude: region.longitude }}
-        title="Tu Ubicación"
-      />
+      {/* Esto ahora solo muestra los pines del usuario actual */}
+      {foundCards.map(card => (
+        <Marker
+          key={card.id}
+          coordinate={card.location}
+          title={card.cardId}
+          description={`Encontrada por: Ti`} // Cambiado
+          pinColor="purple"
+        />
+      ))}
     </MapView>
   );
 }
 
 const styles = StyleSheet.create({
-  map: {
-    flex: 1,
-  },
-  container: { // Estilo para las pantallas de carga/error
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  map: { flex: 1 },
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });

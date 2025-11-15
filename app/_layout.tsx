@@ -1,24 +1,35 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import React from 'react';
+import { ActivityIndicator, View } from 'react-native'; // Para la pantalla de carga
+import { AuthProvider, useAuth } from '../context/AuthContext';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+// Este componente decide si mostrar 'cargando' o la app
+const RootLayout = () => {
+  const { loading } = useAuth(); // Solo necesitamos saber si está cargando
 
-export const unstable_settings = {
-  anchor: '(tabs)',
+  // Si estamos autenticando (creando el usuario anónimo),
+  // mostramos un indicador de carga.
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#A020F0" />
+      </View>
+    );
+  }
+
+  // Una vez cargado, solo mostramos las pestañas (tabs)
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" />
+    </Stack>
+  );
 };
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
+// El layout principal que envuelve todo en el AuthProvider
+export default function AppLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <AuthProvider>
+      <RootLayout />
+    </AuthProvider>
   );
 }
