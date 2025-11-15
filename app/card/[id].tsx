@@ -1,74 +1,117 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Button, StyleSheet, Text, View } from 'react-native';
-import { useAuth } from '../../context/AuthContext';
+import { ActivityIndicator, Alert, Button, StyleSheet, Text, View } from 'react-native';
 import { db } from '../../firebaseConfig';
+// Firestore
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  where
+} from 'firebase/firestore';
 
-// Tipo para la carta ENCONTRADA
+import { useAuth } from '../../context/AuthContext';
+
+// -------------------------------------
+// TIPOS DE DATOS
+// -------------------------------------
 interface FoundCard {
   cardId: string;
   location: { latitude: number; longitude: number };
   userId: string;
-  timestamp: any;
 }
 
-// Tipo para la carta ESTÁTICA
 interface TarotCard {
   nombre: string;
   numero: number;
-  descripcion: string;
+  descripcion?: string;
 }
 
+interface QuestCard {
+  questOwnerId: string;
+  originalFoundCardId: string;
+  cardId: string;
+  location: { latitude: number; longitude: number };
+  status: 'locked' | 'completed';
+  timestamp: any;
+}
+
+// -------------------------------------
+// COMPONENTE PRINCIPAL
+// -------------------------------------
 export default function CardDetailScreen() {
-  // 1. Obtenemos el [id] del link (ej. "xyz123")
-  const { id } = useLocalSearchParams<{ id: string }>();
-  
+  const { id } = useLocalSearchParams<{ id: string }>(); // ID del documento en found_cards
+  const { user } = useAuth();
+  const router = useRouter();
+
+  // Estados para la carta
   const [foundCard, setFoundCard] = useState<FoundCard | null>(null);
   const [tarotCard, setTarotCard] = useState<TarotCard | null>(null);
+
+  // Estados de control
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isFoundByMe, setIsFoundByMe] = useState(false);
-  
-  const { user } = useAuth(); // Para ver si la carta es nuestra
-  const router = useRouter(); // Para volver al mapa
 
+  // NUEVA LÓGICA
+  const [isFoundByMe, setIsFoundByMe] = useState(false);
+  const [hasAcceptedQuest, setHasAcceptedQuest] = useState(false);
+  const [isAccepting, setIsAccepting] = useState(false);
+
+  // -------------------------------------
+  // CARGA DE DATOS
+  // -------------------------------------
   useEffect(() => {
-    if (!id) return; // Si no hay ID, no hacer nada
+    if (!id || !user) return;
 
     const fetchCardData = async () => {
       try {
-        // --- 2. Buscar la CARTA ENCONTRADA (de 'found_cards') ---
+        // 1. Buscar la carta encontrada
         const foundCardRef = doc(db, 'found_cards', id);
         const foundCardSnap = await getDoc(foundCardRef);
 
         if (!foundCardSnap.exists()) {
-          setError("Esta carta ya no existe o el link es incorrecto.");
+          setError("Este link es incorrecto o la carta ya no existe.");
           setLoading(false);
           return;
         }
 
         const foundData = foundCardSnap.data() as FoundCard;
         setFoundCard(foundData);
-        
-        // Verificamos si esta carta la encontré yo
-        if (user && foundData.userId === user.uid) {
-          setIsFoundByMe(true);
-        }
 
-        // --- 3. Buscar la CARTA ESTÁTICA (de 'cards') ---
-        // Usamos el 'cardId' (ej. "el_mago") de la carta encontrada
-        const tarotCardRef = doc(db, 'cards', foundData.cardId);
-        const tarotCardSnap = await getDoc(tarotCardRef);
+        // 2. Cargar la carta estática
+        const tarotRef = doc(db, 'cards', foundData.cardId);
+        const tarotSnap = await getDoc(tarotRef);
 
-        if (tarotCardSnap.exists()) {
-          setTarotCard(tarotCardSnap.data() as TarotCard);
+        if (tarotSnap.exists()) {
+          setTarotCard(tarotSnap.data() as TarotCard);
         } else {
           setError("Datos de la carta no encontrados.");
         }
 
+        // 3. Lógica de usuario
+        if (foundData.userId === user.uid) {
+          setIsFoundByMe(true); // Es mía
+        } else {
+          // Ver si ya acepté esta misión
+          const questQuery = query(
+            collection(db, 'quest_cards'),
+            where('questOwnerId', '==', user.uid),
+            where('originalFoundCardId', '==', id)
+          );
+
+          const questSnap = await getDocs(questQuery);
+
+          if (!questSnap.empty) {
+            setHasAcceptedQuest(true);
+          }
+        }
+
       } catch (err) {
-        console.error("Error al cargar carta del link:", err);
+        console.error("Error al cargar link:", err);
         setError("No se pudo cargar la carta.");
       } finally {
         setLoading(false);
@@ -76,48 +119,130 @@ export default function CardDetailScreen() {
     };
 
     fetchCardData();
-  }, [id, user]); // Se ejecuta si cambia el 'id' o el 'user'
+  }, [id, user]);
 
-  // --- Renderizado ---
+  // -------------------------------------
+  // ACEPTAR MISIÓN
+  // -------------------------------------
+  const handleAcceptQuest = async () => {
+    if (!user || !foundCard) return;
+
+    setIsAccepting(true);
+
+    try {
+      const newQuest: Omit<QuestCard, 'timestamp'> = {
+        questOwnerId: user.uid,
+        originalFoundCardId: id!,
+        cardId: foundCard.cardId,
+        location: foundCard.location,
+        status: 'locked'
+      };
+
+      await addDoc(collection(db, 'quest_cards'), {
+        ...newQuest,
+        timestamp: serverTimestamp()
+      });
+
+      Alert.alert(
+        "¡Misión aceptada!",
+        "La carta ha sido añadida a tu mapa como 'bloqueada'. Debes escanear el QR por ti mismo."
+      );
+
+      router.replace('/(tabs)');
+
+    } catch (error) {
+      console.error("Error al aceptar misión:", error);
+      Alert.alert("Error", "No se pudo aceptar la misión.");
+    } finally {
+      setIsAccepting(false);
+    }
+  };
+
+  // -------------------------------------
+  // RENDERIZADO
+  // -------------------------------------
   if (loading) {
-    return <View style={styles.container}><ActivityIndicator size="large" color="#A020F0" /></View>;
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#A020F0" />
+      </View>
+    );
   }
 
   if (error) {
-    return <View style={styles.container}><Text style={styles.errorText}>{error}</Text></View>;
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
   }
 
   if (!foundCard || !tarotCard) {
-    return <View style={styles.container}><Text>No se encontraron datos.</Text></View>;
+    return (
+      <View style={styles.container}>
+        <Text>No se encontraron datos de la carta.</Text>
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
+
       <Text style={styles.title}>{tarotCard.nombre}</Text>
-      
-      {/* 4. Lógica de "Bloqueado" (tu idea original) */}
-      {isFoundByMe ? (
+
+      {/* OPCIÓN 1: Es mi carta */}
+      {isFoundByMe && (
         <>
-          <Text style={styles.description}>{tarotCard.descripcion}</Text>
           <Text style={styles.info}>¡Esta carta ya está en tu mazo!</Text>
+          <Text style={styles.description}>{tarotCard.descripcion}</Text>
         </>
-      ) : (
+      )}
+
+      {/* OPCIÓN 2: Ya aceptaste la misión */}
+      {!isFoundByMe && hasAcceptedQuest && (
+        <>
+          <Text style={styles.info}>Esta misión ya está en tu mapa.</Text>
+          <Text style={styles.description}>Ve a escanear el QR para completarla.</Text>
+        </>
+      )}
+
+      {/* OPCIÓN 3: No es mía y no he aceptado misión */}
+      {!isFoundByMe && !hasAcceptedQuest && (
         <>
           <Text style={styles.description}>
             Un amigo te ha compartido la carta "{tarotCard.nombre}".
           </Text>
+
           <Text style={styles.lockedInfo}>
-            Para desbloquearla en tu mazo, ¡debes escanear el QR tú mismo!
+            ¿Quieres aceptar la misión y añadir esta carta bloqueada a tu mapa?
           </Text>
-          {/* Aquí podríamos añadir un botón para "Ver en el Mapa" */}
+
+          <View style={styles.buttonContainer}>
+            <Button
+              title={isAccepting ? "Guardando..." : "Aceptar Misión"}
+              onPress={handleAcceptQuest}
+              disabled={isAccepting}
+              color="#A020F0"
+            />
+          </View>
         </>
       )}
 
-      <Button title="Volver al Mapa" onPress={() => router.replace('/(tabs)')} />
+      <View style={styles.buttonContainer}>
+        <Button 
+          title="Volver al Mapa" 
+          onPress={() => router.replace('/(tabs)')} 
+          color="#555" 
+        />
+      </View>
+
     </View>
   );
 }
 
+// -------------------------------------
+// ESTILOS
+// -------------------------------------
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -146,7 +271,7 @@ const styles = StyleSheet.create({
   },
   lockedInfo: {
     fontSize: 16,
-    color: '#c0392b', // Rojo
+    color: '#c0392b',
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 30,
@@ -155,4 +280,8 @@ const styles = StyleSheet.create({
     color: 'red',
     fontSize: 16,
   },
+  buttonContainer: {
+    width: '80%',
+    marginVertical: 10,
+  }
 });
