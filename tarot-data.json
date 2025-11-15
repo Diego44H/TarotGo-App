@@ -1,0 +1,28 @@
+{
+  "arcanos_mayores": [
+    {
+      "id": "el_loco",
+      "nombre": "El Loco",
+      "numero": 0,
+      "descripcion": "Representa la inocencia, la libertad, la espontaneidad y el comienzo de un nuevo viaje. Puede advertir sobre la ingenuidad o la imprudencia.",
+      "imagen_url": "https://...url_de_imagen_loco.png",
+      "modelo_3d_url": "https://...url_modelo_loco.gltf"
+    },
+    {
+      "id": "el_mago",
+      "nombre": "El Mago",
+      "numero": 1,
+      "descripcion": "Simboliza la habilidad, la manifestación, el poder de la voluntad y la conexión entre el mundo espiritual y el material. Representa la acción y la iniciativa.",
+      "imagen_url": "https://...url_de_imagen_mago.png",
+      "modelo_3d_url": "https://...url_modelo_mago.gltf"
+    },
+    {
+      "id": "la_sacerdotisa",
+      "nombre": "La Sacerdotisa",
+      "numero": 2,
+      "descripcion": "Representa la intuición, el misterio, el subconsciente y el conocimiento oculto. Es una carta de pasividad, sabiduría interior y secretos.",
+      "imagen_url": "https://...url_de_imagen_sacerdotisa.png",
+      "modelo_3d_url": "https://...url_modelo_sacerdotisa.gltf"
+    }
+  ]
+}
