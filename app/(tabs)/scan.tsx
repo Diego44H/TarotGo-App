@@ -1,15 +1,6 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  query,
-  serverTimestamp,
-  where
-} from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import React, { useState } from 'react';
 import { Alert, Button, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
@@ -20,10 +11,6 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanned, setIsScanned] = useState(false);
   const { user } = useAuth();
-
-  // -------------------------------------------------------------------------
-  // 🟣 LÓGICA COMPLETA DEL ESCÁNER (MISIÓN + NUEVA CARTA + YA EN MAZO)
-  // -------------------------------------------------------------------------
   const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
 
     if (isScanned) return;
@@ -36,9 +23,6 @@ export default function ScanScreen() {
     }
 
     try {
-      // ---------------------------------------------------------------------
-      // 1️⃣ ¿YA TENGO ESTA CARTA EN MI MAZO?
-      // ---------------------------------------------------------------------
       const foundQuery = query(
         collection(db, "found_cards"),
         where("userId", "==", user.uid),

@@ -1,21 +1,18 @@
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Button, FlatList, Share, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebaseConfig';
 
-// Tipo para las cartas estáticas
 interface TarotCard {
-  id: string;
+  id: string; 
   nombre: string;
   numero: number;
   descripcion: string;
 }
 
-// 👈 Tipo modificado
 interface MergedCard extends TarotCard {
   found: boolean;
-  foundCardDocId: string | null;
 }
 
 export default function DeckScreen() {
@@ -25,96 +22,39 @@ export default function DeckScreen() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) return; 
 
     const fetchAndMergeCards = async () => {
       try {
-        // 1. Obtener TODAS las cartas
         const cardsSnapshot = await getDocs(collection(db, "cards"));
         const allCards: TarotCard[] = cardsSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as TarotCard[];
-
-        // 2. Escuchar las cartas encontradas
         const foundCardsQuery = query(collection(db, "found_cards"), where("userId", "==", user.uid));
-
         const unsubscribe = onSnapshot(foundCardsQuery, (foundSnapshot) => {
-
-          // 👈 Map modificado => Map<cardId, foundCardDocId>
-          const foundCardsMap = new Map<string, string>();
+          const foundCardsSet = new Set<string>();
           foundSnapshot.forEach(doc => {
-            foundCardsMap.set(doc.data().cardId, doc.id);
+            foundCardsSet.add(doc.data().cardId); 
           });
-
-          // 👈 Fusión modificada
           const mergedData = allCards.map(card => ({
             ...card,
-            found: foundCardsMap.has(card.id),
-            foundCardDocId: foundCardsMap.get(card.id) || null,
+            found: foundCardsSet.has(card.id),
           }));
 
           setMergedCards(mergedData);
           setLoading(false);
           setError(null);
-
-        }, (err) => {
-          console.error("Error escuchando found_cards:", err);
-          setError("No se pudieron cargar las cartas encontradas.");
-          setLoading(false);
         });
-
         return unsubscribe;
 
-      } catch (e) {
-        console.error("Error en FETCH:", e);
-        setError("No se pudieron cargar las cartas.");
-        setLoading(false);
-      }
+      } catch (e) { }
     };
-
     fetchAndMergeCards();
-
   }, [user]);
 
-
-  // 👈 Función compartir
-  const handleShare = async (card: MergedCard) => {
-    if (!card.foundCardDocId) return;
-
-    // Este es el link que queremos compartir
-    const deepLink = `https://tarotgoapp.vercel.app/card/${card.foundCardDocId}`;
-
-    try {
-      // Usamos la API Share
-      await Share.share({
-        // 'message' es el texto que se enviará
-        message: `¡Encontré una carta! Ábrela en TarotGo: ${deepLink}`,
-        // 'title' es para el diálogo de Android
-        title: `¡Te comparto la carta ${card.nombre}!`
-      });
-    } catch (error) {
-      Alert.alert("Error", "No se pudo compartir la carta.");
-    }
-  };
-
-
-  // Renderizado
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#A020F0" />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
+  if (loading) { /* ... (cargando) ... */ }
+  if (error) { /* ... (error) ... */ }
 
   return (
     <FlatList
@@ -125,21 +65,9 @@ export default function DeckScreen() {
           <Text style={[styles.cardTitle, !item.found && styles.cardTextLocked]}>
             {item.nombre} {item.found ? "✅" : "(Bloqueada)"}
           </Text>
-
           <Text style={[styles.cardDescription, !item.found && styles.cardTextLocked]}>
             {item.found ? item.descripcion : "Escanea esta carta para desbloquearla."}
           </Text>
-
-          {/* 👈 Botón agregar */}
-          {item.found && (
-            <View style={styles.shareButton}>
-              <Button 
-                title="Compartir"
-                onPress={() => handleShare(item)}
-                color="#A020F0"
-              />
-            </View>
-          )}
         </View>
       )}
       contentContainerStyle={styles.listContainer}
@@ -147,8 +75,6 @@ export default function DeckScreen() {
   );
 }
 
-
-// --- Estilos ---
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
@@ -195,8 +121,4 @@ const styles = StyleSheet.create({
     color: 'red',
     fontSize: 16,
   },
-  shareButton: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
-  }
 });

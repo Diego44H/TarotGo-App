@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'; // Importamos los iconos
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
 
@@ -6,19 +6,19 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#A020F0', // Color activo (morado)
+        tabBarActiveTintColor: '#A020F0',
       }}>
       <Tabs.Screen
-        name="index" // Este es el archivo index.tsx
+        name="index" // Mapa
         options={{
-          title: 'Mapa', // Título de la pestaña
+          title: 'Mapa',
           tabBarIcon: ({ color }) => (
             <Ionicons name="map" size={28} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="scan" // Corresponde a scan.tsx
+        name="scan" // Escanear
         options={{
           title: 'Escanear',
           tabBarIcon: ({ color }) => (
@@ -27,7 +27,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="deck" // Corresponde a deck.tsx
+        name="deck"
         options={{
           title: 'Mazo',
           tabBarIcon: ({ color }) => (
@@ -36,11 +36,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile" // Corresponde a profile.tsx
+        name="contacts" 
         options={{
-          title: 'Perfil',
+          title: 'Contactos',
           tabBarIcon: ({ color }) => (
-            <Ionicons name="person" size={28} color={color} />
+            <Ionicons name="people" size={28} color={color} /> 
           ),
         }}
       />

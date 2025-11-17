@@ -5,9 +5,6 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebaseConfig';
 
-// =======================
-// Tipos
-// =======================
 interface FoundCard {
   id: string;
   cardId: string;
@@ -22,9 +19,6 @@ interface QuestCard {
   status: 'locked' | 'completed';
 }
 
-// =======================
-// Importación dinámica del mapa
-// =======================
 let MapView: any = View;
 let Marker: any = View;
 let RegionType: any = null;
@@ -173,23 +167,11 @@ export default function MapScreen() {
         />
       ))}
 
-      {/* Pines Grises */}
-      {questCards.map((card) => (
-        <Marker
-          key={card.id}
-          coordinate={card.location}
-          title={`${card.cardId} (Misión)`}
-          description="Ve a esta ubicación para escanear la carta."
-          pinColor="grey"
-        />
-      ))}
     </MapView>
   );
 }
 
-// =======================
-// Estilos
-// =======================
+
 const styles = StyleSheet.create({
   map: { flex: 1 },
   container: {
